@@ -232,6 +232,7 @@ const env = {
 let mongod = null;
 let stopping = false;
 let expectedMongodStop = false;
+let mongodPort = port;
 
 function exe(name) {
   return path.join(binRoot, isWindows ? name + ".exe" : name);
@@ -253,7 +254,7 @@ function run(command, args, options = {}) {
   }
 }
 
-async function waitForTcp(timeoutMs = 60_000) {
+async function waitForTcp(listenPort = port, timeoutMs = 60_000) {
   const net = await import("node:net");
   const startedAt = Date.now();
   let lastError = null;
@@ -261,7 +262,7 @@ async function waitForTcp(timeoutMs = 60_000) {
   while (Date.now() - startedAt < timeoutMs) {
     try {
       await new Promise((resolve, reject) => {
-        const socket = net.createConnection({ host, port: Number(port) });
+        const socket = net.createConnection({ host, port: Number(listenPort) });
         socket.once("connect", () => {
           socket.end();
           resolve();
@@ -278,14 +279,50 @@ async function waitForTcp(timeoutMs = 60_000) {
   throw lastError ?? new Error("Timed out waiting for MongoDB.");
 }
 
-function startMongod({ auth }) {
+async function reserveLoopbackPort() {
+  const net = await import("node:net");
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, host, () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("Failed to reserve MongoDB bootstrap port.")));
+        return;
+      }
+      server.close(() => resolve(String(address.port)));
+    });
+  });
+}
+
+function mongoUrl(listenPort, authenticated) {
+  const credentials = authenticated
+    ? encodeURIComponent(username) + ":" + encodeURIComponent(password) + "@"
+    : "";
+  return "mongodb://" + credentials + host + ":" + listenPort + "/admin";
+}
+
+function requestMongodShutdown({ listenPort, authenticated }) {
+  spawnSync(exe("mongosh"), [
+    mongoUrl(listenPort, authenticated),
+    "--quiet",
+    "--eval",
+    "db.adminCommand({shutdown: 1, force: true})",
+  ], {
+    stdio: "ignore",
+    env,
+  });
+}
+
+function startMongod({ auth, listenPort = port }) {
+  mongodPort = listenPort;
   mongod = spawn(exe("mongod"), [
     "--dbpath",
     dataRoot,
     "--bind_ip",
     bindIp,
     "--port",
-    port,
+    listenPort,
     ...(auth ? ["--auth"] : []),
   ], {
     stdio: "inherit",
@@ -299,18 +336,18 @@ function startMongod({ auth }) {
   });
 }
 
-async function stopMongod() {
+async function stopMongod({ listenPort = mongodPort, authenticated = false } = {}) {
   if (!mongod || mongod.exitCode !== null || mongod.signalCode !== null) {
     return;
   }
 
   expectedMongodStop = true;
-  mongod.kill("SIGTERM");
+  requestMongodShutdown({ listenPort, authenticated });
   await Promise.race([
     new Promise((resolve) => mongod.once("close", resolve)),
     sleep(10_000).then(() => {
       if (mongod && mongod.exitCode === null && mongod.signalCode === null) {
-        mongod.kill("SIGKILL");
+        mongod.kill("SIGTERM");
       }
     }),
   ]);
@@ -324,7 +361,7 @@ async function stop() {
   }
 
   stopping = true;
-  await stopMongod();
+  await stopMongod({ authenticated: true });
   process.exit(0);
 }
 
@@ -336,22 +373,19 @@ async function initializeIfNeeded() {
     return;
   }
 
-  startMongod({ auth: false });
-  await waitForTcp();
+  const bootstrapPort = await reserveLoopbackPort();
+  startMongod({ auth: false, listenPort: bootstrapPort });
+  await waitForTcp(bootstrapPort);
   try {
     run(exe("mongosh"), [
-      "admin",
-      "--host",
-      host,
-      "--port",
-      port,
+      mongoUrl(bootstrapPort, false),
       "--quiet",
       "--eval",
-      "db.createUser({user: " + JSON.stringify(username) + ", pwd: " + JSON.stringify(password) + ", roles: [{role: 'root', db: 'admin'}]})",
+      "db.getSiblingDB('admin').createUser({user: " + JSON.stringify(username) + ", pwd: " + JSON.stringify(password) + ", roles: [{role: 'root', db: 'admin'}]}); if (!db.getSiblingDB('admin').getUser(" + JSON.stringify(username) + ")) { throw new Error('MongoDB bootstrap user was not created'); }",
     ]);
     writeFileSync(initializedMarker, new Date().toISOString() + "\n", "utf8");
   } finally {
-    await stopMongod();
+    await stopMongod({ listenPort: bootstrapPort, authenticated: false });
   }
 }
 
