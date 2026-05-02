@@ -68,6 +68,7 @@
   },
   "healthcheck": {
     "type": "tcp",
+    "address": "${MONGO_HOST}:${MONGO_PORT}",
     "retries": 80,
     "interval": 250
   },

@@ -137,6 +137,9 @@ if (serviceManifest.id !== "mongo" || serviceManifest.version !== mongoVersion) 
 if (serviceManifest.healthcheck?.type !== "tcp" || serviceManifest.ports?.service !== 8180) {
   throw new Error(`MongoDB service.json health/ports drifted: ${JSON.stringify(serviceManifest)}`);
 }
+if (serviceManifest.healthcheck.address !== "${MONGO_HOST}:${MONGO_PORT}") {
+  throw new Error(`MongoDB service.json must expose TCP healthcheck address from MONGO env: ${JSON.stringify(serviceManifest.healthcheck)}`);
+}
 
 for (const key of ["MONGO_HOST", "MONGO_PORT", "MONGO_USERNAME", "MONGO_PASSWORD", "MONGO_HOME"]) {
   if (!serviceManifest.globalenv?.[key] && !serviceManifest.env?.[key]) {
