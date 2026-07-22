@@ -66,12 +66,15 @@
       }
     ]
   },
-  "healthcheck": {
-    "type": "tcp",
-    "address": "${MONGO_HOST}:${MONGO_PORT}",
-    "retries": 80,
-    "interval": 250
-  },
+  "healthchecks": [
+    {
+      "id": "mongo-tcp-ready",
+      "type": "tcp",
+      "address": "${MONGO_HOST}:${MONGO_PORT}",
+      "retries": 80,
+      "interval": 250
+    }
+  ],
   "updates": {
     "enabled": true,
     "mode": "notify",

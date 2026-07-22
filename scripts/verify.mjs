@@ -134,11 +134,22 @@ if (serviceManifest.id !== "mongo" || serviceManifest.version !== mongoVersion) 
   throw new Error(`Unexpected service manifest identity: ${JSON.stringify({ id: serviceManifest.id, version: serviceManifest.version })}`);
 }
 
-if (serviceManifest.healthcheck?.type !== "tcp" || serviceManifest.ports?.service !== 8180) {
+const legacyHealthField = ["health", "check"].join("");
+if (legacyHealthField in serviceManifest) {
+  throw new Error(`MongoDB service.json must use canonical healthchecks[] instead of the legacy single-check field: ${JSON.stringify(serviceManifest[legacyHealthField])}`);
+}
+
+const [mongoReadyCheck] = serviceManifest.healthchecks ?? [];
+if (
+  serviceManifest.healthchecks?.length !== 1 ||
+  mongoReadyCheck?.id !== "mongo-tcp-ready" ||
+  mongoReadyCheck.type !== "tcp" ||
+  serviceManifest.ports?.service !== 8180
+) {
   throw new Error(`MongoDB service.json health/ports drifted: ${JSON.stringify(serviceManifest)}`);
 }
-if (serviceManifest.healthcheck.address !== "${MONGO_HOST}:${MONGO_PORT}") {
-  throw new Error(`MongoDB service.json must expose TCP healthcheck address from MONGO env: ${JSON.stringify(serviceManifest.healthcheck)}`);
+if (mongoReadyCheck.address !== "${MONGO_HOST}:${MONGO_PORT}") {
+  throw new Error(`MongoDB service.json must expose TCP ready-check address from MONGO env: ${JSON.stringify(mongoReadyCheck)}`);
 }
 
 for (const key of ["MONGO_HOST", "MONGO_PORT", "MONGO_USERNAME", "MONGO_PASSWORD", "MONGO_HOME"]) {
