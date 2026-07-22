@@ -21,12 +21,13 @@ Release artifacts are named with the upstream versions:
 ## Defaults
 
 - Service id: `mongo`
-- Port: `8180`
+- Canonical network endpoint: `mongo` on preferred TCP port `8180`
+- Canonical URL endpoint: `mongodb`
 - Host: `127.0.0.1`
 - Root user: `mongoadmin`
 - Root password: `mongoadmin`
 - Data path: `${SERVICE_ROOT}/runtime/data`
-- Healthcheck: TCP `${MONGO_HOST}:${MONGO_PORT}`
+- Healthcheck: TCP `${endpoint.mongo.bind}:${endpoint.mongo.port}`
 
 The manifest exports `MONGO_HOST`, `MONGO_PORT`, `MONGO_USERNAME`, `MONGO_PASSWORD`, and `MONGO_HOME` through `globalenv`.
 
