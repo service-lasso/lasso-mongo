@@ -84,12 +84,15 @@
       }
     ]
   },
-  "healthcheck": {
-    "type": "tcp",
-    "address": "${endpoint.mongo.bind}:${endpoint.mongo.port}",
-    "retries": 80,
-    "interval": 250
-  },
+  "healthchecks": [
+    {
+      "id": "mongo-tcp-ready",
+      "type": "tcp",
+      "address": "${endpoint.mongo.bind}:${endpoint.mongo.port}",
+      "retries": 80,
+      "interval": 250
+    }
+  ],
   "updates": {
     "enabled": true,
     "mode": "notify",

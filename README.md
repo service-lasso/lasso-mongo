@@ -27,7 +27,7 @@ Release artifacts are named with the upstream versions:
 - Root user: `mongoadmin`
 - Root password: `mongoadmin`
 - Data path: `${SERVICE_ROOT}/runtime/data`
-- Healthcheck: TCP `${endpoint.mongo.bind}:${endpoint.mongo.port}`
+- Healthchecks: `mongo-tcp-ready` TCP `${endpoint.mongo.bind}:${endpoint.mongo.port}`
 
 The manifest exports `MONGO_HOST`, `MONGO_PORT`, `MONGO_USERNAME`, `MONGO_PASSWORD`, and `MONGO_HOME` through `globalenv`.
 

@@ -134,6 +134,10 @@ if (serviceManifest.id !== "mongo" || serviceManifest.version !== mongoVersion) 
   throw new Error(`Unexpected service manifest identity: ${JSON.stringify({ id: serviceManifest.id, version: serviceManifest.version })}`);
 }
 
+const legacyHealthField = ["health", "check"].join("");
+if (legacyHealthField in serviceManifest) {
+  throw new Error(`MongoDB service.json must use canonical healthchecks[] instead of the legacy single-check field: ${JSON.stringify(serviceManifest[legacyHealthField])}`);
+}
 const networkEndpoint = serviceManifest.endpoints?.find((endpoint) => endpoint.id === "mongo");
 const urlEndpoint = serviceManifest.endpoints?.find((endpoint) => endpoint.id === "mongodb");
 
@@ -162,11 +166,16 @@ if (
 if (serviceManifest.env?.MONGO_HOST !== "${endpoint.mongo.bind}" || serviceManifest.env?.MONGO_PORT !== "${endpoint.mongo.port}") {
   throw new Error(`MongoDB service.json must derive MONGO env from endpoint selectors: ${JSON.stringify(serviceManifest.env)}`);
 }
-if (serviceManifest.healthcheck?.type !== "tcp") {
-  throw new Error(`MongoDB service.json healthcheck drifted: ${JSON.stringify(serviceManifest.healthcheck)}`);
+const [mongoReadyCheck] = serviceManifest.healthchecks ?? [];
+if (
+  serviceManifest.healthchecks?.length !== 1 ||
+  mongoReadyCheck?.id !== "mongo-tcp-ready" ||
+  mongoReadyCheck.type !== "tcp"
+) {
+  throw new Error(`MongoDB service.json healthchecks drifted: ${JSON.stringify(serviceManifest.healthchecks)}`);
 }
-if (serviceManifest.healthcheck.address !== "${endpoint.mongo.bind}:${endpoint.mongo.port}") {
-  throw new Error(`MongoDB service.json must expose TCP healthcheck address from endpoint selectors: ${JSON.stringify(serviceManifest.healthcheck)}`);
+if (mongoReadyCheck.address !== "${endpoint.mongo.bind}:${endpoint.mongo.port}") {
+  throw new Error(`MongoDB service.json must expose TCP healthcheck address from endpoint selectors: ${JSON.stringify(mongoReadyCheck)}`);
 }
 
 for (const key of ["MONGO_HOST", "MONGO_PORT", "MONGO_USERNAME", "MONGO_PASSWORD", "MONGO_HOME"]) {
