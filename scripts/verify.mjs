@@ -134,11 +134,39 @@ if (serviceManifest.id !== "mongo" || serviceManifest.version !== mongoVersion) 
   throw new Error(`Unexpected service manifest identity: ${JSON.stringify({ id: serviceManifest.id, version: serviceManifest.version })}`);
 }
 
-if (serviceManifest.healthcheck?.type !== "tcp" || serviceManifest.ports?.service !== 8180) {
-  throw new Error(`MongoDB service.json health/ports drifted: ${JSON.stringify(serviceManifest)}`);
+const networkEndpoint = serviceManifest.endpoints?.find((endpoint) => endpoint.id === "mongo");
+const urlEndpoint = serviceManifest.endpoints?.find((endpoint) => endpoint.id === "mongodb");
+
+if (serviceManifest.ports || serviceManifest.urls) {
+  throw new Error("MongoDB service.json must use canonical endpoints[] instead of legacy ports or top-level urls.");
 }
-if (serviceManifest.healthcheck.address !== "${MONGO_HOST}:${MONGO_PORT}") {
-  throw new Error(`MongoDB service.json must expose TCP healthcheck address from MONGO env: ${JSON.stringify(serviceManifest.healthcheck)}`);
+if (
+  !networkEndpoint ||
+  networkEndpoint.kind !== "network" ||
+  networkEndpoint.protocol !== "tcp" ||
+  networkEndpoint.transport !== "tcp" ||
+  networkEndpoint.bind !== "127.0.0.1" ||
+  networkEndpoint.port?.default !== 8180 ||
+  networkEndpoint.port?.strategy !== "preferred"
+) {
+  throw new Error(`MongoDB service.json network endpoint drifted: ${JSON.stringify(serviceManifest.endpoints)}`);
+}
+if (
+  !urlEndpoint ||
+  urlEndpoint.kind !== "url" ||
+  urlEndpoint.target !== "mongo" ||
+  urlEndpoint.url !== "mongodb://${MONGO_USERNAME}:***@${endpoint.mongo.bind}:${endpoint.mongo.port}/admin"
+) {
+  throw new Error(`MongoDB service.json URL endpoint drifted: ${JSON.stringify(serviceManifest.endpoints)}`);
+}
+if (serviceManifest.env?.MONGO_HOST !== "${endpoint.mongo.bind}" || serviceManifest.env?.MONGO_PORT !== "${endpoint.mongo.port}") {
+  throw new Error(`MongoDB service.json must derive MONGO env from endpoint selectors: ${JSON.stringify(serviceManifest.env)}`);
+}
+if (serviceManifest.healthcheck?.type !== "tcp") {
+  throw new Error(`MongoDB service.json healthcheck drifted: ${JSON.stringify(serviceManifest.healthcheck)}`);
+}
+if (serviceManifest.healthcheck.address !== "${endpoint.mongo.bind}:${endpoint.mongo.port}") {
+  throw new Error(`MongoDB service.json must expose TCP healthcheck address from endpoint selectors: ${JSON.stringify(serviceManifest.healthcheck)}`);
 }
 
 for (const key of ["MONGO_HOST", "MONGO_PORT", "MONGO_USERNAME", "MONGO_PASSWORD", "MONGO_HOME"]) {

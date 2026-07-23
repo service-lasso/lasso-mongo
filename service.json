@@ -4,12 +4,37 @@
   "description": "Release-backed MongoDB Community Server service for local Service Lasso data dependencies.",
   "version": "8.0.17",
   "enabled": true,
-  "ports": {
-    "service": 8180
-  },
+  "endpoints": [
+    {
+      "id": "mongo",
+      "kind": "network",
+      "label": "MongoDB TCP",
+      "direction": "inbound",
+      "transport": "tcp",
+      "protocol": "tcp",
+      "bind": "127.0.0.1",
+      "port": {
+        "default": 8180,
+        "strategy": "preferred"
+      },
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    },
+    {
+      "id": "mongodb",
+      "kind": "url",
+      "label": "mongodb",
+      "target": "mongo",
+      "url": "mongodb://${MONGO_USERNAME}:***@${endpoint.mongo.bind}:${endpoint.mongo.port}/admin",
+      "exposure": "local",
+      "required": true,
+      "primary": true
+    }
+  ],
   "env": {
-    "MONGO_HOST": "127.0.0.1",
-    "MONGO_PORT": "${SERVICE_PORT}",
+    "MONGO_HOST": "${endpoint.mongo.bind}",
+    "MONGO_PORT": "${endpoint.mongo.port}",
     "MONGO_USERNAME": "mongoadmin",
     "MONGO_PASSWORD": "mongoadmin",
     "MONGO_DATA_DIR": "${SERVICE_ROOT}/runtime/data",
@@ -23,13 +48,6 @@
     "MONGO_PASSWORD": "${MONGO_PASSWORD}",
     "MONGO_HOME": "${SERVICE_ARTIFACT_ROOT}"
   },
-  "urls": [
-    {
-      "label": "mongodb",
-      "url": "mongodb://${MONGO_USERNAME}:***@${MONGO_HOST}:${MONGO_PORT}/admin",
-      "kind": "local"
-    }
-  ],
   "artifact": {
     "kind": "archive",
     "source": {
@@ -68,7 +86,7 @@
   },
   "healthcheck": {
     "type": "tcp",
-    "address": "${MONGO_HOST}:${MONGO_PORT}",
+    "address": "${endpoint.mongo.bind}:${endpoint.mongo.port}",
     "retries": 80,
     "interval": 250
   },
